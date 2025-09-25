@@ -4,9 +4,9 @@
 use crate::domain::form::AutorisationForm;
 use crate::domain::format::human_date_fr;
 use anyhow::{Context, Result};
+use genpdf::Element;
 use genpdf::{elements, fonts, style, Alignment, Document, PaperSize, SimplePageDecorator};
 use std::path::Path;
-use genpdf::Element;
 
 pub fn render_pdf(form: &AutorisationForm, school_name: Option<&str>, out: &Path) -> Result<()> {
     // chemins candidats pour trouver DejaVuSans.ttf
@@ -84,11 +84,11 @@ pub fn render_pdf(form: &AutorisationForm, school_name: Option<&str>, out: &Path
     content.push(elements::Break::new(0.2));
 
     let date_str = human_date_fr(&form.date);
-    content.push(elements::Paragraph::new(format!("Date : {}", date_str)));
+    content.push(elements::Paragraph::new(format!("Date : {date_str}")));
     content.push(elements::Paragraph::new(format!("Lieu : {}", form.lieu)));
 
     if let Some(classe) = &form.classe {
-        content.push(elements::Paragraph::new(format!("Classe : {}", classe)));
+        content.push(elements::Paragraph::new(format!("Classe : {classe}")));
     }
 
     if let Some(motif) = &form.motif {
@@ -105,7 +105,7 @@ pub fn render_pdf(form: &AutorisationForm, school_name: Option<&str>, out: &Path
                 .styled(style::Style::new().with_font_size(11)),
         );
         if let Some(tel) = &resp.telephone {
-            content.push(elements::Paragraph::new(format!("Tél : {}", tel)));
+            content.push(elements::Paragraph::new(format!("Tél : {tel}")));
         }
         content.push(elements::Break::new(1.0));
     }
