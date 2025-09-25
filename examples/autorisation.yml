@@ -1,0 +1,10 @@
+enfant:
+  nom: "Dupont"
+  prenom: "Jean"
+date: "25/09/2025"
+lieu: "Saint-Malo"
+classe: "CM1"
+responsable:
+  nom: "Mme Dupont"
+  telephone: "06 12 34 56 78"
+motif: "Sortie pédagogique musée"
