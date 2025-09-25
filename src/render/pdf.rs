@@ -1,154 +1,133 @@
 // src/render/pdf.rs
-use crate::domain::form::AutorisationForm;
-use anyhow::{Context, Result};
-use genpdf::Element;
-use std::path::Path;
+#![forbid(unsafe_code)]
 
-const TYPST_TEMPLATE: &str = include_str!("../../templates/autorisation.typ");
+use crate::domain::form::AutorisationForm;
+use crate::domain::format::human_date_fr;
+use anyhow::{Context, Result};
+use genpdf::{elements, fonts, style, Alignment, Document, PaperSize, SimplePageDecorator};
+use std::path::Path;
+use genpdf::Element;
 
 pub fn render_pdf(form: &AutorisationForm, school_name: Option<&str>, out: &Path) -> Result<()> {
-    let typ = prepare_typst(form, school_name);
+    // chemins candidats pour trouver DejaVuSans.ttf
+    let candidates = [
+        "./fonts",
+        "./assets/fonts",
+        "/usr/share/fonts/truetype/dejavu",
+        "/usr/share/fonts",
+        "/usr/local/share/fonts",
+    ];
 
-    // Try typst first (if present)
-    if let Ok(typst_path) = which::which("typst") {
-        let mut tmp = std::env::temp_dir();
-        tmp.push("autorisation.typ");
-        std::fs::write(&tmp, typ.as_bytes()).context("write typst tmp")?;
-        let status = std::process::Command::new(typst_path)
-            .arg("compile")
-            .arg(&tmp)
-            .arg("-o")
-            .arg(out)
-            .status()
-            .context("failed to spawn typst")?;
-        if status.success() {
-            return Ok(());
+    let mut font_family_opt = None;
+    for dir in &candidates {
+        if std::path::Path::new(dir).exists() {
+            if let Ok(f) = fonts::from_files(dir, "DejaVuSans", None) {
+                font_family_opt = Some(f);
+                break;
+            }
         }
-        // else fallthrough to genpdf
     }
 
-    // Fallback: produce a presentable PDF via genpdf (requires fonts/DejaVuSans.ttf)
-    fallback_pdf_genpdf(form, school_name, out)?;
-    Ok(())
-}
+    let font_family = font_family_opt
+        .ok_or_else(|| {
+            anyhow::anyhow!(
+                "Impossible de charger une font pour genpdf. Placez DejaVuSans.ttf dans ./fonts ou installez fonts-dejavu."
+            )
+        })?;
 
-fn prepare_typst(form: &AutorisationForm, school_name: Option<&str>) -> String {
-    let mut t = TYPST_TEMPLATE.to_string();
-    t = t.replace("{{school_name}}", school_name.unwrap_or(""));
-    t = t.replace("{{enfant_nom}}", &form.enfant.nom);
-    t = t.replace(
-        "{{enfant_prenom}}",
-        form.enfant.prenom.clone().unwrap_or_default().as_str(),
-    );
-    t = t.replace("{{date}}", &form.date);
-    t = t.replace("{{lieu}}", &form.lieu);
-    t = t.replace("{{classe}}", form.classe.as_deref().unwrap_or(""));
-    t = t.replace(
-        "{{responsable_nom}}",
-        form.responsable
-            .as_ref()
-            .map(|r| r.nom.clone())
-            .unwrap_or_default()
-            .as_str(),
-    );
-    t = t.replace(
-        "{{responsable_tel}}",
-        form.responsable
-            .as_ref()
-            .and_then(|r| r.telephone.clone())
-            .unwrap_or_default()
-            .as_str(),
-    );
-    t = t.replace("{{motif}}", form.motif.clone().unwrap_or_default().as_str());
-    t
-}
-
-fn fallback_pdf_genpdf(
-    form: &AutorisationForm,
-    school_name: Option<&str>,
-    out: &Path,
-) -> Result<()> {
-    use genpdf::{elements, fonts, style, Alignment, Document, PaperSize, SimplePageDecorator};
-
-    // load fonts
-    let font_family = fonts::from_files("./fonts", "DejaVuSans", None)
-        .context("Failed to load font family from ./fonts (add DejaVuSans.ttf)")?;
-
+    // Document
     let mut doc = Document::new(font_family);
     doc.set_paper_size(PaperSize::A4);
-    doc.set_font_size(12);
+    doc.set_font_size(11);
 
-    // --- Make an owned copy of school_name so the header closure can be 'static ---
-    let school_name_owned: Option<String> = school_name.map(|s| s.to_string());
-
+    // Header (simple). Pas de footer compliqué pour compatibilité genpdf 0.2.0
+    let school_name_owned = school_name.map(|s| s.to_string());
     let mut decorator = SimplePageDecorator::new();
-    decorator.set_margins(10);
-
-    // use `move` so the closure takes ownership of school_name_owned (no borrowed refs escape)
+    decorator.set_margins(18); // points
     decorator.set_header(move |page| {
         let mut layout = elements::LinearLayout::vertical();
         if page == 1 {
             if let Some(ref s) = school_name_owned {
-                // push centered, bold school name
-                layout.push(
-                    elements::Paragraph::new(s.clone())
-                        .aligned(Alignment::Center)
-                        .styled(style::Style::new().with_font_size(12).bold()),
-                );
-                layout.push(elements::Break::new(0.5));
+                if !s.is_empty() {
+                    layout.push(
+                        elements::Paragraph::new(s.clone())
+                            .aligned(Alignment::Center)
+                            .styled(style::Style::new().with_font_size(14).bold()),
+                    );
+                    layout.push(elements::Break::new(0.3));
+                }
             }
         }
-        // return the layout as an element (styled)
-        layout.styled(style::Style::new().with_font_size(10))
+        layout.styled(style::Style::new().with_font_size(9))
     });
-
     doc.set_page_decorator(decorator);
 
-    // content (same as before again)...
+    // Title
     doc.push(
         elements::Paragraph::new("Autorisation de sortie")
             .aligned(Alignment::Center)
-            .styled(style::Style::new().with_font_size(16).bold()),
+            .styled(style::Style::new().with_font_size(18).bold()),
     );
-    doc.push(elements::Break::new(1.0));
+    doc.push(elements::Break::new(0.8));
 
-    let enfant = format!(
-        "Enfant : {} {}",
-        form.enfant.nom,
-        form.enfant.prenom.clone().unwrap_or_default()
+    // Contenu principal (vertical)
+    let mut content = elements::LinearLayout::vertical();
+
+    content.push(
+        elements::Paragraph::new(format!(
+            "Enfant : {} {}",
+            form.enfant.nom,
+            form.enfant.prenom.clone().unwrap_or_default()
+        ))
+        .styled(style::Style::new().with_font_size(12).bold()),
     );
-    doc.push(elements::Paragraph::new(enfant));
-    doc.push(elements::Paragraph::new(format!("Date : {}", form.date)));
-    doc.push(elements::Paragraph::new(format!("Lieu : {}", form.lieu)));
+    content.push(elements::Break::new(0.2));
+
+    let date_str = human_date_fr(&form.date);
+    content.push(elements::Paragraph::new(format!("Date : {}", date_str)));
+    content.push(elements::Paragraph::new(format!("Lieu : {}", form.lieu)));
 
     if let Some(classe) = &form.classe {
-        doc.push(elements::Paragraph::new(format!("Classe : {classe}")));
+        content.push(elements::Paragraph::new(format!("Classe : {}", classe)));
     }
+
+    if let Some(motif) = &form.motif {
+        content.push(elements::Break::new(0.3));
+        content.push(elements::Paragraph::new("Motif :").styled(style::Style::new().bold()));
+        content.push(elements::Paragraph::new(motif.clone()));
+    }
+
+    content.push(elements::Break::new(1.0));
+
     if let Some(resp) = &form.responsable {
-        doc.push(elements::Paragraph::new(format!(
-            "Responsable légal : {}",
-            resp.nom
-        )));
+        content.push(
+            elements::Paragraph::new(format!("Responsable légal : {}", resp.nom))
+                .styled(style::Style::new().with_font_size(11)),
+        );
         if let Some(tel) = &resp.telephone {
-            doc.push(elements::Paragraph::new(format!("Tél : {tel}")));
+            content.push(elements::Paragraph::new(format!("Tél : {}", tel)));
         }
-    }
-    if let Some(m) = &form.motif {
-        doc.push(elements::Paragraph::new(format!("Motif : {m}")));
+        content.push(elements::Break::new(1.0));
     }
 
-    doc.push(elements::Break::new(2.0));
-    let mut sig = elements::LinearLayout::vertical();
-    sig.push(elements::Paragraph::new(
-        "Fait à ___________________, le ___________________",
+    // Signature block (stacked — droite alignée pour la ligne de signature)
+    content.push(elements::Paragraph::new(
+        "Fait à _______________________, le _______________________",
     ));
-    sig.push(elements::Paragraph::new(
-        "Signature du responsable légal : ____________________________",
-    ));
-    doc.push(sig);
+    content.push(elements::Break::new(1.0));
+    content.push(elements::Paragraph::new("Signature du responsable légal :"));
+    content.push(elements::Break::new(1.0));
+    content.push(
+        elements::Paragraph::new("____________________________")
+            .aligned(Alignment::Right)
+            .styled(style::Style::new().with_font_size(11)),
+    );
 
-    // write file
+    doc.push(content);
+
+    // Render
     doc.render_to_file(out)
-        .context("genpdf failed to render PDF")?;
+        .context("échec lors du rendu PDF avec genpdf")?;
+
     Ok(())
 }
