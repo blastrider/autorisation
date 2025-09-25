@@ -55,7 +55,7 @@ impl AutorisationForm {
     }
 
     pub fn from_interactive() -> Result<Self> {
-        // use dialoguer to prompt
+        // use dialoguer to prompt ok
         use dialoguer::Input;
         let enfant_nom: String = Input::new()
             .with_prompt("Nom de l'enfant (required)")
