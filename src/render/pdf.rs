@@ -104,7 +104,7 @@ fn fallback_pdf_genpdf(
 
     doc.set_page_decorator(decorator);
 
-    // content (same as before)...
+    // content (same as before again)...
     doc.push(
         elements::Paragraph::new("Autorisation de sortie")
             .aligned(Alignment::Center)
