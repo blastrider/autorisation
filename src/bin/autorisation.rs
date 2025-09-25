@@ -3,7 +3,7 @@
 
 use anyhow::{Context, Result};
 use clap::Parser;
-use tracing::{info, error};
+use tracing::{error, info};
 use tracing_subscriber::EnvFilter;
 
 use autorisation::domain::form::AutorisationForm;
@@ -11,7 +11,10 @@ use autorisation::infra::fs::resolve_out_path;
 use autorisation::render::{markdown, pdf};
 
 #[derive(Parser)]
-#[command(name = "autorisation", about = "Génère une autorisation de sortie (PDF/MD) - offline")]
+#[command(
+    name = "autorisation",
+    about = "Génère une autorisation de sortie (PDF/MD) - offline"
+)]
 struct Cli {
     #[arg(long)]
     input: Option<String>,

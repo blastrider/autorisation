@@ -1,8 +1,8 @@
 // src/render/pdf.rs
 use crate::domain::form::AutorisationForm;
 use anyhow::{Context, Result};
-use std::path::Path;
 use genpdf::Element;
+use std::path::Path;
 
 const TYPST_TEMPLATE: &str = include_str!("../../templates/autorisation.typ");
 
@@ -63,7 +63,11 @@ fn prepare_typst(form: &AutorisationForm, school_name: Option<&str>) -> String {
     t
 }
 
-fn fallback_pdf_genpdf(form: &AutorisationForm, school_name: Option<&str>, out: &Path) -> Result<()> {
+fn fallback_pdf_genpdf(
+    form: &AutorisationForm,
+    school_name: Option<&str>,
+    out: &Path,
+) -> Result<()> {
     use genpdf::{elements, fonts, style, Alignment, Document, PaperSize, SimplePageDecorator};
 
     // load fonts
@@ -118,16 +122,19 @@ fn fallback_pdf_genpdf(form: &AutorisationForm, school_name: Option<&str>, out: 
     doc.push(elements::Paragraph::new(format!("Lieu : {}", form.lieu)));
 
     if let Some(classe) = &form.classe {
-        doc.push(elements::Paragraph::new(format!("Classe : {}", classe)));
+        doc.push(elements::Paragraph::new(format!("Classe : {classe}")));
     }
     if let Some(resp) = &form.responsable {
-        doc.push(elements::Paragraph::new(format!("Responsable légal : {}", resp.nom)));
+        doc.push(elements::Paragraph::new(format!(
+            "Responsable légal : {}",
+            resp.nom
+        )));
         if let Some(tel) = &resp.telephone {
-            doc.push(elements::Paragraph::new(format!("Tél : {}", tel)));
+            doc.push(elements::Paragraph::new(format!("Tél : {tel}")));
         }
     }
     if let Some(m) = &form.motif {
-        doc.push(elements::Paragraph::new(format!("Motif : {}", m)));
+        doc.push(elements::Paragraph::new(format!("Motif : {m}")));
     }
 
     doc.push(elements::Break::new(2.0));
@@ -141,7 +148,7 @@ fn fallback_pdf_genpdf(form: &AutorisationForm, school_name: Option<&str>, out: 
     doc.push(sig);
 
     // write file
-    doc.render_to_file(out).context("genpdf failed to render PDF")?;
+    doc.render_to_file(out)
+        .context("genpdf failed to render PDF")?;
     Ok(())
 }
-
